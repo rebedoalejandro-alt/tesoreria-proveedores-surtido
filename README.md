@@ -10,18 +10,18 @@ Necesidad = stock + cobros pendientes − pagos pendientes
 
 - Cobros pendientes de la red = venta a la red × días de cobro / 365. La venta a la red es la compra más el margen de Reynasa (0 % por defecto).
 - Pagos pendientes a proveedores = compra × días de pago / 365, proveedor a proveedor.
-- Stock = valor a precio medio de lo que hay en almacén central (centro 20) y centros de los artículos de cada proveedor. Se puede limitar al almacén central.
+- Stock = compra × días de rotación / 365. La rotación para la que se compra es de 60 días por defecto y se puede cambiar en general o proveedor a proveedor. También se puede usar el stock real de hoy (valor a precio medio en almacén central, centro 20, y centros) o solo el del almacén central.
 - Cifra positiva: caja que Reynasa tendría que poner. Negativa: excedente.
 
 Es una foto en régimen: supone que Reynasa revende lo mismo que compra y que la compra se reparte igual a lo largo del año.
 
 ## Qué se puede cambiar en la web
 
-- Días de cobro a la red, margen, IVA y si el stock que se financia es todo o solo el del almacén central.
-- Días de pago de cada proveedor (vacío = los de Navision).
+- Días de cobro a la red, rotación para la que se compra, margen, IVA y qué stock se financia (el de la rotación o el real de hoy).
+- Días de pago y días de rotación de cada proveedor (vacío = los de Navision o la rotación general).
 - Quitar proveedores del cálculo.
 
-Estos cambios se guardan en el navegador de cada persona y no afectan a los demás. «Volver a los datos de Navision» los deshace.
+Estos cambios se guardan en el navegador de cada persona y no afectan a los demás. «Deshacer cambios por proveedor» vuelve a los días de Navision y a la rotación general.
 
 ## Datos
 

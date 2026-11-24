@@ -107,6 +107,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, th button:focus
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); vertical-align: middle; }
+td { white-space: nowrap; }
 th { font-size: 12.5px; color: var(--muted); font-weight: 600; background: var(--surface); }
 th.l, td.l { text-align: left; }
 tbody tr:hover td { background: color-mix(in srgb, var(--accent) 4%, transparent); }
@@ -165,7 +166,7 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
   <div class="statusrow">
     <span class="chip info" id="chip-datos">Datos de Navision</span>
     <span class="chip warn" id="chip-guardado">Tus cambios se guardan solo en este navegador</span>
-    <button type="button" id="btn-restaurar">Volver a los datos de Navision</button>
+    <button type="button" id="btn-restaurar">Deshacer cambios por proveedor</button>
   </div>
   <div class="msg" id="msg" role="status" aria-live="polite"></div>
 </header>
@@ -176,10 +177,15 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     <label for="p-dias">Días de cobro a la red
       <span class="unit"><input type="number" id="p-dias" min="0" max="365" step="1"><span>días</span></span>
     </label>
+    <label for="p-rot">Rotación para la que se compra
+      <span class="unit"><input type="number" id="p-rot" min="0" max="730" step="1"><span>días</span></span>
+      <span class="small muted">Se puede cambiar por proveedor en la tabla.</span>
+    </label>
     <label for="p-stock">Stock que financia Reynasa
       <select id="p-stock">
-        <option value="total">Almacén central y centros</option>
-        <option value="almacen">Solo almacén central</option>
+        <option value="rotacion">Según la rotación</option>
+        <option value="total">Real de hoy: almacén y centros</option>
+        <option value="almacen">Real de hoy: solo almacén central</option>
       </select>
     </label>
     <label for="p-margen">Margen de Reynasa sobre coste
@@ -188,7 +194,7 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     <label for="p-iva">IVA en cobros y pagos
       <span class="unit"><input type="number" id="p-iva" min="0" max="21" step="1"><span>%</span></span>
     </label>
-    <button type="button" class="link" id="btn-reset-params">Volver a 60 días, todo el stock, sin margen ni IVA</button>
+    <button type="button" class="link" id="btn-reset-params">Volver a 60 días de cobro y de rotación, sin margen ni IVA</button>
   </form>
 
   <section class="panel kpis" aria-labelledby="t-kpis">
@@ -239,7 +245,7 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
       <button type="button" id="btn-copiar">Copiar tabla</button>
     </div>
   </div>
-  <p class="small muted">Los días de pago del recuadro dorado se pueden cambiar (vacío = los de Navision) y «Quitar» saca a un proveedor del cálculo; ambos cambios se quedan en tu navegador. Para añadir o quitar proveedores para todos se edita el fichero proveedores-surtido.json del repositorio y los datos se recalculan esa noche.</p>
+  <p class="small muted">Los días de pago y de rotación de los recuadros dorados se pueden cambiar por proveedor (vacío = el valor general o el de Navision) y «Quitar» saca a un proveedor del cálculo; esos cambios se quedan en tu navegador. Para añadir o quitar proveedores para todos se edita el fichero proveedores-surtido.json del repositorio y los datos se recalculan esa noche.</p>
   <div class="tablebox">
     <table id="tabla">
       <thead><tr id="tabla-head"></tr></thead>
@@ -256,7 +262,7 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     <ul>
       <li>Cobros pendientes de la red = venta a la red × días de cobro / 365. La venta a la red es la compra más el margen de Reynasa.</li>
       <li>Pagos pendientes a proveedores = compra × días de pago / 365, proveedor a proveedor.</li>
-      <li>Stock = valor a precio medio de lo que hay hoy en almacén central y centros de los artículos de cada proveedor.</li>
+      <li>Stock = compra × días de rotación / 365. La rotación es de 60 días por defecto y se puede cambiar en general o por proveedor. También se puede usar el stock real de hoy (valor a precio medio en almacén central y centros).</li>
       <li>Cifra positiva: caja que Reynasa tendría que poner. Negativa: excedente.</li>
     </ul>
   </div>
@@ -282,13 +288,19 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
 
 </div>
 
-<script id="seed" type="application/json">{"v":1,"params":{"diasCobro":60,"margen":0,"iva":0,"stock":"total"},"proveedores":[],"datos":{"desde":"","hasta":"","fechaStock":"","actualizado":"","filas":{}}}</script>
+<script id="seed" type="application/json">{"v":1,"params":{"diasCobro":60,"rotacion":60,"margen":0,"iva":0,"stock":"rotacion"},"proveedores":[],"datos":{"desde":"","hasta":"","fechaStock":"","actualizado":"","filas":{}}}</script>
 <script>
 (function () {
   "use strict";
   var SERVER = "MMMN Metabase MCP";
   var DOC_PATH = "modelo/actual";
-  var DEFAULT_PARAMS = { diasCobro: 60, margen: 0, iva: 0, stock: "total" };
+  var DEFAULT_PARAMS = { diasCobro: 60, rotacion: 60, margen: 0, iva: 0, stock: "rotacion" };
+  function numOr(v, def) { return (v === null || v === undefined || v === "" || !isFinite(v)) ? def : Number(v); }
+  function migrarParams(pr) {
+    var q = Object.assign({}, pr || {});
+    if (q.rotacion === undefined) { q.rotacion = 60; q.stock = "rotacion"; }
+    return Object.assign({}, DEFAULT_PARAMS, q);
+  }
   var SEED = JSON.parse(document.getElementById("seed").textContent);
 
   var state = clone(SEED);
@@ -326,32 +338,38 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     var dn = diasNav(f.pt);
     var du = (p.dias === null || p.dias === undefined || p.dias === "") ? dn : Number(p.dias);
     var dpCalc = (du === null || isNaN(du)) ? 0 : du;
-    var s = prm.stock === "almacen" ? sa : sa + sc;
+    var rotOverride = !(p.rot === null || p.rot === undefined || p.rot === "" || !isFinite(p.rot));
+    var ru = rotOverride ? Number(p.rot) : prm.rotacion;
+    var sReal = sa + sc;
+    var s = prm.stock === "almacen" ? sa : (prm.stock === "total" ? sReal : c * ru / 365);
     var venta = c * (1 + prm.margen / 100);
     var k = 1 + prm.iva / 100;
     var cli = venta * k * prm.diasCobro / 365;
     var pro = c * k * dpCalc / 365;
     return {
-      p: p, f: f, c: c, sa: sa, sc: sc, dn: dn, du: du, dp: dpCalc, s: s, venta: venta,
+      p: p, f: f, c: c, sa: sa, sc: sc, sReal: sReal, ru: ru, rotOverride: rotOverride, dn: dn, du: du, dp: dpCalc, s: s, venta: venta,
       cli: cli, pro: pro, nec: s + cli - pro, sinPlazo: (du === null || isNaN(du)),
-      dstock: c > 0 ? s / c * 365 : null
+      dhoy: c > 0 ? sReal / c * 365 : null
     };
   }
   function calcTodo(prm) {
     var filas = state.proveedores.map(function (p) { return calcFila(p, prm); });
-    var t = { c: 0, s: 0, sa: 0, sc: 0, venta: 0, cli: 0, pro: 0, nec: 0, cdp: 0 };
-    filas.forEach(function (r) { t.c += r.c; t.s += r.s; t.sa += r.sa; t.sc += r.sc; t.venta += r.venta; t.cli += r.cli; t.pro += r.pro; t.nec += r.nec; t.cdp += r.c * r.dp; });
+    var t = { c: 0, s: 0, sa: 0, sc: 0, sReal: 0, venta: 0, cli: 0, pro: 0, nec: 0, cdp: 0, cru: 0 };
+    filas.forEach(function (r) { t.c += r.c; t.s += r.s; t.sa += r.sa; t.sc += r.sc; t.sReal += r.sReal; t.venta += r.venta; t.cli += r.cli; t.pro += r.pro; t.nec += r.nec; t.cdp += r.c * r.dp; t.cru += r.c * r.ru; });
     t.dpMedio = t.c > 0 ? t.cdp / t.c : 0;
     t.dstock = t.c > 0 ? t.s / t.c * 365 : 0;
+    t.rotMedia = t.c > 0 ? t.cru / t.c : 0;
+    t.dhoy = t.c > 0 ? t.sReal / t.c * 365 : 0;
     return { filas: filas, t: t };
   }
   function prmActual() {
     var p = state.params || DEFAULT_PARAMS;
     return {
-      diasCobro: isFinite(p.diasCobro) ? Number(p.diasCobro) : 60,
-      margen: isFinite(p.margen) ? Number(p.margen) : 0,
-      iva: isFinite(p.iva) ? Number(p.iva) : 0,
-      stock: p.stock === "almacen" ? "almacen" : "total"
+      diasCobro: numOr(p.diasCobro, 60),
+      rotacion: numOr(p.rotacion, 60),
+      margen: numOr(p.margen, 0),
+      iva: numOr(p.iva, 0),
+      stock: (p.stock === "almacen" || p.stock === "total") ? p.stock : "rotacion"
     };
   }
 
@@ -362,6 +380,8 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     $("p-margen").value = p.margen;
     $("p-iva").value = p.iva;
     $("p-stock").value = p.stock;
+    $("p-rot").value = p.rotacion;
+    $("p-rot").disabled = p.stock !== "rotacion";
     $("lede-dias").textContent = p.diasCobro;
   }
 
@@ -382,7 +402,8 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     lectura += "con " + meur(t.s) + " de stock (" + Math.round(t.dstock) + " días de compra), " + (t.nec > 0 ? "la necesidad total es de " + meur(t.nec) + "." : "le sobran " + meur(-t.nec) + ".");
     $("k-lectura").textContent = lectura;
     $("k-stock").textContent = meur(t.s);
-    $("k-stock-sub").textContent = (p.stock === "almacen" ? "solo almacén central · " : "almacén " + meur(t.sa) + " + centros " + meur(t.sc) + " · ") + Math.round(t.dstock) + " días";
+    if (p.stock === "rotacion") $("k-stock-sub").textContent = "rotación de " + Math.round(t.rotMedia) + " días de media · hoy hay " + meur(t.sReal) + " (" + Math.round(t.dhoy) + " días)";
+    else $("k-stock-sub").textContent = (p.stock === "almacen" ? "stock real, solo almacén central · " : "stock real: almacén " + meur(t.sa) + " + centros " + meur(t.sc) + " · ") + Math.round(t.dstock) + " días";
     $("k-clientes-lab").textContent = "+ Cobros pendientes de la red (" + p.diasCobro + " días)";
     $("k-clientes").textContent = meur(t.cli);
     $("k-clientes-sub").textContent = "venta a la red " + meur(t.venta) + (p.iva ? " · con IVA " + p.iva + " %" : "");
@@ -446,9 +467,10 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     { k: "forma", t: "Forma de pago", l: true },
     { k: "dn", t: "Días Navision" },
     { k: "du", t: "Días de pago usados" },
-    { k: "sa", t: "Stock almacén" },
-    { k: "sc", t: "Stock centros" },
-    { k: "dstock", t: "Días de stock" },
+    { k: "ru", t: "Días de rotación" },
+    { k: "s", t: "Stock financiado" },
+    { k: "sReal", t: "Stock hoy" },
+    { k: "dhoy", t: "Días stock hoy" },
     { k: "cli", t: "Cobros pendientes" },
     { k: "pro", t: "Pagos pendientes" },
     { k: "nec", t: "Necesidad" },
@@ -536,9 +558,27 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
         guardar(); renderTodo();
       });
       tdD.appendChild(inp); tr.appendChild(tdD);
-      tr.appendChild(el("td", null, eur(r.sa)));
-      tr.appendChild(el("td", null, eur(r.sc)));
-      tr.appendChild(el("td", null, r.dstock === null ? "–" : dias(r.dstock)));
+      var tdR = el("td");
+      var inR = el("input", "days");
+      inR.type = "number"; inR.min = "0"; inR.max = "730"; inR.step = "1";
+      inR.id = "r-" + r.p.n;
+      inR.setAttribute("aria-label", "Días de rotación para " + (r.p.nombre || r.p.n));
+      inR.value = Math.round(r.ru);
+      inR.disabled = prm.stock !== "rotacion";
+      if (r.rotOverride) { inR.classList.add("override"); inR.title = "Cambiado a mano. Vacía la casilla para volver a la rotación general."; }
+      inR.addEventListener("change", function () {
+        var v = inR.value.trim();
+        var p = findProv(r.p.n); if (!p) return;
+        if (v === "" || Number(v) === prmActual().rotacion) p.rot = null;
+        else { var n = Math.max(0, Math.min(730, Math.round(Number(v)))); if (isNaN(n)) return; p.rot = n; }
+        guardar(); renderTodo();
+      });
+      tdR.appendChild(inR); tr.appendChild(tdR);
+      tr.appendChild(el("td", null, eur(r.s)));
+      var tdHoy = el("td", null, eur(r.sReal));
+      tdHoy.title = "Almacén central " + eur(r.sa) + " · centros " + eur(r.sc);
+      tr.appendChild(tdHoy);
+      tr.appendChild(el("td", null, r.dhoy === null ? "–" : dias(r.dhoy)));
       tr.appendChild(el("td", null, eur(r.cli)));
       tr.appendChild(el("td", null, eur(r.pro)));
       tr.appendChild(el("td", r.nec > 0 ? "pos" : "neg", eur(r.nec)));
@@ -550,7 +590,7 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
         if (ui.borrando === r.p.n) {
           state.proveedores = state.proveedores.filter(function (x) { return x.n !== r.p.n; });
           ui.borrando = null; guardar(); renderTodo();
-          aviso("ok", "Proveedor quitado del cálculo en este navegador. Para recuperarlo, pulsa «Volver a los datos de Navision».");
+          aviso("ok", "Proveedor quitado del cálculo en este navegador. Para recuperarlo, pulsa «Deshacer cambios por proveedor».");
         } else {
           ui.borrando = r.p.n; renderTabla();
           setTimeout(function () { if (ui.borrando === r.p.n) { ui.borrando = null; renderTabla(); } }, 4000);
@@ -562,9 +602,9 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     var t = res.t;
     var ft = $("tabla-foot"); ft.textContent = "";
     var vis = filas.length === res.filas.length ? "Total " + res.filas.length + " proveedores" : "Total (" + res.filas.length + " proveedores; la búsqueda no cambia el total)";
-    [vis, "", eur(t.c), "", "", Math.round(t.dpMedio) + " de media", eur(t.sa), eur(t.sc), dias(t.dstock), eur(t.cli), eur(t.pro), eur(t.nec), ""].forEach(function (v, i) {
+    [vis, "", eur(t.c), "", "", Math.round(t.dpMedio) + " de media", Math.round(t.rotMedia) + " de media", eur(t.s), eur(t.sReal), dias(t.dhoy), eur(t.cli), eur(t.pro), eur(t.nec), ""].forEach(function (v, i) {
       var td = el("td", (i === 0 || i === 1 || i === 3) ? "l" : null, v);
-      if (i === 11) td.className = t.nec > 0 ? "pos" : "neg";
+      if (i === 12) td.className = t.nec > 0 ? "pos" : "neg";
       ft.appendChild(td);
     });
   }
@@ -587,13 +627,14 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     function num(id, def, lo, hi) { var v = Number($(id).value); if (!isFinite(v) || $(id).value === "") return def; return Math.max(lo, Math.min(hi, v)); }
     state.params = {
       diasCobro: Math.round(num("p-dias", 60, 0, 365)),
+      rotacion: Math.round(num("p-rot", 60, 0, 730)),
       margen: num("p-margen", 0, 0, 100),
       iva: num("p-iva", 0, 0, 21),
-      stock: $("p-stock").value === "almacen" ? "almacen" : "total"
+      stock: ($("p-stock").value === "almacen" || $("p-stock").value === "total") ? $("p-stock").value : "rotacion"
     };
     guardar(); renderTodo();
   }
-  ["p-dias", "p-margen", "p-iva", "p-stock"].forEach(function (id) { $(id).addEventListener("change", leerParams); });
+  ["p-dias", "p-rot", "p-margen", "p-iva", "p-stock"].forEach(function (id) { $(id).addEventListener("change", leerParams); });
   $("form-params").addEventListener("submit", function (e) { e.preventDefault(); leerParams(); });
   $("btn-reset-params").addEventListener("click", function () { state.params = clone(DEFAULT_PARAMS); guardar(); renderTodo(); });
   $("f-buscar").addEventListener("input", function () { ui.filtro = this.value; renderTabla(); });
@@ -601,15 +642,15 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
   // ---------- exportar ----------
   function filasExport() {
     var res = calcTodo(prmActual());
-    var cab = ["Nº proveedor", "Proveedor", "Categoría", "Compra 12 meses (€)", "Forma de pago", "Días de pago Navision", "Días de pago usados", "Stock almacén (€)", "Stock centros (€)", "Stock financiado (€)", "Días de stock", "Cobros pendientes (€)", "Pagos pendientes (€)", "Necesidad (€)"];
+    var cab = ["Nº proveedor", "Proveedor", "Categoría", "Compra 12 meses (€)", "Forma de pago", "Días de pago Navision", "Días de pago usados", "Días de rotación", "Stock financiado (€)", "Stock hoy almacén (€)", "Stock hoy centros (€)", "Días de stock hoy", "Cobros pendientes (€)", "Pagos pendientes (€)", "Necesidad (€)"];
     var rows = res.filas.map(function (r) {
-      return [r.p.n, r.p.nombre || "", r.p.cat || "", Math.round(r.c), forma(r.f.pm), r.dn === null ? "" : r.dn, r.dp, Math.round(r.sa), Math.round(r.sc), Math.round(r.s), r.dstock === null ? "" : Math.round(r.dstock), Math.round(r.cli), Math.round(r.pro), Math.round(r.nec)];
+      return [r.p.n, r.p.nombre || "", r.p.cat || "", Math.round(r.c), forma(r.f.pm), r.dn === null ? "" : r.dn, r.dp, Math.round(r.ru), Math.round(r.s), Math.round(r.sa), Math.round(r.sc), r.dhoy === null ? "" : Math.round(r.dhoy), Math.round(r.cli), Math.round(r.pro), Math.round(r.nec)];
     });
     var t = res.t;
-    rows.push(["", "TOTAL", "", Math.round(t.c), "", "", Math.round(t.dpMedio), Math.round(t.sa), Math.round(t.sc), Math.round(t.s), Math.round(t.dstock), Math.round(t.cli), Math.round(t.pro), Math.round(t.nec)]);
+    rows.push(["", "TOTAL", "", Math.round(t.c), "", "", Math.round(t.dpMedio), Math.round(t.rotMedia), Math.round(t.s), Math.round(t.sa), Math.round(t.sc), Math.round(t.dhoy), Math.round(t.cli), Math.round(t.pro), Math.round(t.nec)]);
     var p = prmActual();
     rows.push([]);
-    rows.push(["Supuestos", "Días de cobro a la red: " + p.diasCobro, "Stock: " + (p.stock === "almacen" ? "solo almacén central" : "almacén central y centros"), "Margen: " + p.margen + " %", "IVA: " + p.iva + " %"]);
+    rows.push(["Supuestos", "Días de cobro a la red: " + p.diasCobro, "Stock: " + (p.stock === "rotacion" ? "rotación de " + p.rotacion + " días (salvo cambios por proveedor)" : (p.stock === "almacen" ? "real de hoy, solo almacén central" : "real de hoy, almacén central y centros")), "Margen: " + p.margen + " %", "IVA: " + p.iva + " %"]);
     return [cab].concat(rows);
   }
   function aTexto(filas, sep) {
@@ -649,12 +690,14 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
   function escribirLocal(esc) {
     try { localStorage.setItem(CLAVE, JSON.stringify(esc)); chipGuardado(true); } catch (e) { chipGuardado(false); }
   }
+  function vacio(v) { return v === null || v === undefined || v === "" || !isFinite(v); }
   function guardar() {
-    var esc = { params: state.params, dias: {}, quitados: [] };
+    var esc = { params: state.params, dias: {}, rot: {}, quitados: [] };
     var presentes = {};
     state.proveedores.forEach(function (p) {
       presentes[p.n] = true;
-      if (p.dias !== null && p.dias !== undefined && p.dias !== "") esc.dias[p.n] = p.dias;
+      if (!vacio(p.dias)) esc.dias[p.n] = p.dias;
+      if (!vacio(p.rot)) esc.rot[p.n] = p.rot;
     });
     BASE.proveedores.forEach(function (p) { if (!presentes[p.n]) esc.quitados.push(p.n); });
     escribirLocal(esc);
@@ -663,12 +706,13 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
     var esc = leerLocal() || {};
     var quitados = Array.isArray(esc.quitados) ? esc.quitados : [];
     var d = (esc.dias && typeof esc.dias === "object") ? esc.dias : {};
+    var rr = (esc.rot && typeof esc.rot === "object") ? esc.rot : {};
     state = {
-      params: Object.assign({}, DEFAULT_PARAMS, esc.params || {}),
+      params: migrarParams(esc.params),
       proveedores: BASE.proveedores.filter(function (p) { return quitados.indexOf(p.n) < 0; }).map(function (p) {
         var q = clone(p);
-        var v = d[p.n];
-        q.dias = (v === null || v === undefined || v === "" || !isFinite(v)) ? null : Number(v);
+        q.dias = vacio(d[p.n]) ? null : Number(d[p.n]);
+        q.rot = vacio(rr[p.n]) ? null : Number(rr[p.n]);
         return q;
       }),
       datos: BASE.datos
@@ -676,10 +720,10 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
   }
   $("btn-restaurar").addEventListener("click", function () {
     var esc = leerLocal() || {};
-    esc.dias = {}; esc.quitados = [];
+    esc.dias = {}; esc.rot = {}; esc.quitados = [];
     escribirLocal(esc);
     aplicarEscenario(); renderTodo();
-    aviso("ok", "Vuelves a ver todos los proveedores con los días de pago de Navision.");
+    aviso("ok", "Vuelves a ver todos los proveedores con los días de pago de Navision y la rotación general.");
   });
   function leerJson(url) {
     return fetch(url, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(url); return r.json(); });
@@ -689,7 +733,7 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(
       var conf = res[0], dat = res[1];
       if (!Array.isArray(conf) || !dat || typeof dat.filas !== "object") throw new Error("formato");
       BASE.proveedores = conf.filter(function (p) { return p && /^\d{6,12}$/.test(String(p.n)); }).map(function (p) {
-        return { n: String(p.n), nombre: String(p.nombre || ""), cat: String(p.cat || ""), dias: null, hoja: p.hoja || null };
+        return { n: String(p.n), nombre: String(p.nombre || ""), cat: String(p.cat || ""), dias: null, rot: null, hoja: p.hoja || null };
       });
       BASE.datos = { desde: dat.desde, hasta: dat.hasta, fechaStock: dat.fechaStock, actualizado: dat.generado, filas: dat.filas };
       aplicarEscenario(); renderTodo();
