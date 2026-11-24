@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesorería proveedores de surtido</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Plan: herramienta de trabajo; resumen arriba (necesidad y su desglose), palancas a la izquierda del resumen, detalle por proveedor abajo. Azul marino y oro de Reynasa sobre neutros azulados. */
+:root {
+  --bg: #f4f5f9;
+  --surface: #ffffff;
+  --ink: #161b33;
+  --muted: #5b6078;
+  --line: #dfe2ec;
+  --accent: #1e2761;
+  --accent-soft: #e7e9f4;
+  --gold: #a87e2a;
+  --need: #b4372b;
+  --need-soft: #fbeceb;
+  --gain: #1f7a4d;
+  --gain-soft: #e7f4ec;
+  --warn: #8a5a00;
+  --warn-soft: #fdf3dc;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10131f; --surface: #181c2c; --ink: #e8eaf3; --muted: #a2a7bf; --line: #2c3148;
+    --accent: #9fb0ff; --accent-soft: #232a4a; --gold: #d9b35e;
+    --need: #ff8f84; --need-soft: #3a1f22; --gain: #6fd3a0; --gain-soft: #17322a;
+    --warn: #f0c36a; --warn-soft: #3a3020;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10131f; --surface: #181c2c; --ink: #e8eaf3; --muted: #a2a7bf; --line: #2c3148;
+  --accent: #9fb0ff; --accent-soft: #232a4a; --gold: #d9b35e;
+  --need: #ff8f84; --need-soft: #3a1f22; --gain: #6fd3a0; --gain-soft: #17322a;
+  --warn: #f0c36a; --warn-soft: #3a3020;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 24px 20px 48px; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
+h1 { font-size: 30px; color: var(--accent); }
+h2 { font-size: 20px; }
+h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+p { margin: 0; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+header.top { display: grid; gap: 10px; }
+.lede { max-width: 72ch; color: var(--muted); font-size: 16px; }
+.statusrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); white-space: nowrap; }
+.chip.ok { color: var(--gain); border-color: color-mix(in srgb, var(--gain) 35%, transparent); background: var(--gain-soft); }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); background: var(--warn-soft); }
+.chip.bad { color: var(--need); border-color: color-mix(in srgb, var(--need) 35%, transparent); background: var(--need-soft); }
+.chip.info { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+
+button, .btn { font: inherit; font-size: 14px; font-weight: 500; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 7px 14px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+button.primary:hover { filter: brightness(1.12); }
+button.link { border: none; background: none; color: var(--accent); padding: 4px 6px; text-decoration: underline; text-underline-offset: 3px; }
+button.danger { color: var(--need); }
+button:disabled { opacity: 0.55; cursor: progress; }
+button:focus-visible, input:focus-visible, select:focus-visible, th button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.msg { padding: 10px 14px; border-radius: 8px; font-size: 14px; display: none; max-width: 90ch; }
+.msg.show { display: block; }
+.msg.info { background: var(--accent-soft); color: var(--accent); }
+.msg.error { background: var(--need-soft); color: var(--need); }
+.msg.ok { background: var(--gain-soft); color: var(--gain); }
+
+.top-grid { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 20px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; align-content: start; }
+.params label { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.params input, .params select { font: inherit; font-size: 15px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; width: 100%; }
+.params .unit { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.params .unit span { color: var(--muted); font-size: 14px; }
+.lever { border: 1px solid var(--gold); background: color-mix(in srgb, var(--gold) 8%, var(--surface)); }
+
+.kpis { display: grid; gap: 14px; }
+.hero { display: grid; grid-template-columns: auto 1fr; gap: 6px 24px; align-items: end; }
+.hero .big { font-family: var(--font-display); font-size: 46px; font-weight: 600; line-height: 1; }
+.hero .big.need { color: var(--need); }
+.hero .big.gain { color: var(--gain); }
+.hero .reading { color: var(--ink); max-width: 64ch; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; background: var(--surface); }
+.tile .lab { font-size: 12.5px; color: var(--muted); }
+.tile .val { font-family: var(--font-display); font-size: 24px; font-weight: 600; }
+.tile .sub { font-size: 12.5px; color: var(--muted); }
+.tile.plus { border-top: 3px solid var(--need); }
+.tile.minus { border-top: 3px solid var(--gain); }
+.tile.base { border-top: 3px solid var(--accent); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 12.5px; color: var(--muted); font-weight: 600; background: var(--surface); }
+th.l, td.l { text-align: left; }
+tbody tr:hover td { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+tr.current td { background: var(--accent-soft); font-weight: 600; }
+.bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; }
+.bar.need { background: var(--need); }
+.bar.gain { background: var(--gain); }
+.barcell { width: 38%; text-align: left; }
+.pos { color: var(--need); }
+.neg { color: var(--gain); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: space-between; }
+.toolbar .left, .toolbar .right { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.toolbar input { font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.toolbar label { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.addform { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; }
+
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); max-height: 75vh; overflow-y: auto; }
+.tablebox table th { position: sticky; top: 0; z-index: 1; border-bottom: 2px solid var(--line); }
+.tablebox td { font-size: 14px; white-space: nowrap; }
+.tablebox td.name { white-space: normal; min-width: 240px; }
+.tablebox td.cat { white-space: normal; min-width: 150px; max-width: 220px; font-size: 13px; color: var(--muted); }
+th button.sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+th button.sort:hover { color: var(--ink); }
+.vname { font-weight: 500; }
+.vno { font-size: 12px; color: var(--muted); }
+.flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.flags .chip { font-size: 11.5px; padding: 1px 8px; }
+input.days { width: 72px; font: inherit; font-size: 14px; text-align: right; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--gold); background: color-mix(in srgb, var(--gold) 8%, var(--surface)); color: var(--ink); }
+input.days.override { font-weight: 600; border-width: 2px; }
+tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(--surface); position: sticky; bottom: 0; }
+
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; max-width: 70ch; }
+.formula { font-family: var(--font-display); font-size: 17px; color: var(--accent); }
+
+@media (max-width: 1000px) {
+  .top-grid, .two, .notes { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .tiles { grid-template-columns: 1fr; }
+  .hero { grid-template-columns: 1fr; }
+  .hero .big { font-size: 38px; }
+  h1 { font-size: 25px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Tesorería proveedores de surtido</h1>
+  <p class="lede">Caja que necesitaría Reynasa si compra a estos proveedores a sus plazos de pago actuales y revende a la red Aurgi/Motortown cobrando a <strong id="lede-dias">60</strong> días.</p>
+  <div class="statusrow">
+    <span class="chip info" id="chip-datos">Datos de Navision</span>
+    <span class="chip warn" id="chip-guardado">Tus cambios se guardan solo en este navegador</span>
+    <button type="button" id="btn-restaurar">Volver a los datos de Navision</button>
+  </div>
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+</header>
+
+<div class="top-grid">
+  <form class="panel params lever" id="form-params" autocomplete="off">
+    <h3>Supuestos</h3>
+    <label for="p-dias">Días de cobro a la red
+      <span class="unit"><input type="number" id="p-dias" min="0" max="365" step="1"><span>días</span></span>
+    </label>
+    <label for="p-stock">Stock que financia Reynasa
+      <select id="p-stock">
+        <option value="total">Almacén central y centros</option>
+        <option value="almacen">Solo almacén central</option>
+      </select>
+    </label>
+    <label for="p-margen">Margen de Reynasa sobre coste
+      <span class="unit"><input type="number" id="p-margen" min="0" max="100" step="0.5"><span>%</span></span>
+    </label>
+    <label for="p-iva">IVA en cobros y pagos
+      <span class="unit"><input type="number" id="p-iva" min="0" max="21" step="1"><span>%</span></span>
+    </label>
+    <button type="button" class="link" id="btn-reset-params">Volver a 60 días, todo el stock, sin margen ni IVA</button>
+  </form>
+
+  <section class="panel kpis" aria-labelledby="t-kpis">
+    <h3 id="t-kpis">Necesidad de tesorería</h3>
+    <div class="hero">
+      <div class="big num" id="k-necesidad">–</div>
+      <p class="reading" id="k-lectura"></p>
+    </div>
+    <div class="tiles">
+      <div class="tile plus"><span class="lab">+ Stock financiado</span><span class="val num" id="k-stock">–</span><span class="sub num" id="k-stock-sub"></span></div>
+      <div class="tile plus"><span class="lab" id="k-clientes-lab">+ Cobros pendientes de la red</span><span class="val num" id="k-clientes">–</span><span class="sub num" id="k-clientes-sub"></span></div>
+      <div class="tile minus"><span class="lab">− Pagos pendientes a proveedores</span><span class="val num" id="k-prov">–</span><span class="sub num" id="k-prov-sub"></span></div>
+      <div class="tile base"><span class="lab">Compra anual</span><span class="val num" id="k-compra">–</span><span class="sub num" id="k-compra-sub"></span></div>
+    </div>
+  </section>
+</div>
+
+<div class="two">
+  <section class="panel" aria-labelledby="t-plazo">
+    <h2 id="t-plazo">Por plazo de pago al proveedor</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th class="l">Plazo de pago</th><th>Proveedores</th><th>Compra 12 meses</th><th>Stock</th><th>Cobros − pagos</th><th>Necesidad</th></tr></thead>
+        <tbody id="tb-plazos"></tbody>
+      </table>
+    </div>
+  </section>
+  <section class="panel" aria-labelledby="t-sens">
+    <h2 id="t-sens">Si se cobra a la red a otros días</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th class="l">Días de cobro</th><th>Necesidad</th><th class="barcell l"><span class="muted">rojo: necesidad · verde: excedente</span></th></tr></thead>
+        <tbody id="tb-sens"></tbody>
+      </table>
+    </div>
+    <p class="small muted" id="sens-nota"></p>
+  </section>
+</div>
+
+<section class="panel" aria-labelledby="t-prov">
+  <div class="toolbar">
+    <div class="left">
+      <h2 id="t-prov">Proveedores</h2>
+      <label for="f-buscar">Buscar<input type="search" id="f-buscar" placeholder="Nombre, nº o categoría"></label>
+    </div>
+    <div class="right">
+      <button type="button" id="btn-csv">Descargar CSV</button>
+      <button type="button" id="btn-copiar">Copiar tabla</button>
+    </div>
+  </div>
+  <p class="small muted">Los días de pago del recuadro dorado se pueden cambiar (vacío = los de Navision) y «Quitar» saca a un proveedor del cálculo; ambos cambios se quedan en tu navegador. Para añadir o quitar proveedores para todos se edita el fichero proveedores-surtido.json del repositorio y los datos se recalculan esa noche.</p>
+  <div class="tablebox">
+    <table id="tabla">
+      <thead><tr id="tabla-head"></tr></thead>
+      <tbody id="tabla-body"></tbody>
+      <tfoot><tr id="tabla-foot"></tr></tfoot>
+    </table>
+  </div>
+</section>
+
+<section class="notes">
+  <div class="panel">
+    <h3>Cómo se calcula</h3>
+    <p class="formula">Necesidad = stock + cobros pendientes − pagos pendientes</p>
+    <ul>
+      <li>Cobros pendientes de la red = venta a la red × días de cobro / 365. La venta a la red es la compra más el margen de Reynasa.</li>
+      <li>Pagos pendientes a proveedores = compra × días de pago / 365, proveedor a proveedor.</li>
+      <li>Stock = valor a precio medio de lo que hay hoy en almacén central y centros de los artículos de cada proveedor.</li>
+      <li>Cifra positiva: caja que Reynasa tendría que poner. Negativa: excedente.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>De dónde salen los datos</h3>
+    <ul>
+      <li>Compra: mercancía recibida de cada proveedor en los últimos 12 meses en Navision/Business Central, a coste y sin IVA (facturada y pendiente de facturar).</li>
+      <li>Plazo y forma de pago: ficha de cada proveedor en Navision.</li>
+      <li>Stock: foto diaria de stock de Metabase. Cada artículo se asigna al proveedor al que más se le ha comprado en los últimos 24 meses. Almacén central = centro 20.</li>
+      <li>Lista de proveedores: fichero proveedores-surtido.json del repositorio, que sale de la hoja «Contactos proveedores de surtido - compra 12m».</li>
+      <li>Compra, plazos y stock se actualizan solos cada noche desde Navision a través de Metabase.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>A tener en cuenta</h3>
+    <ul>
+      <li>Es una foto en régimen: supone que Reynasa revende lo mismo que compra y que la compra se reparte igual a lo largo del año. No recoge la estacionalidad.</li>
+      <li>La compra incluye todo el producto de estos proveedores, también lo que va directo a centros, así que no coincide con la cifra de surtido de la hoja de compras.</li>
+      <li>Los avisos naranjas marcan diferencias entre la hoja de compras y la ficha de Navision. El cálculo usa Navision salvo que se cambien los días a mano.</li>
+    </ul>
+  </div>
+</section>
+
+</div>
+
+<script id="seed" type="application/json">{"v":1,"params":{"diasCobro":60,"margen":0,"iva":0,"stock":"total"},"proveedores":[],"datos":{"desde":"","hasta":"","fechaStock":"","actualizado":"","filas":{}}}</script>
+<script>
+(function () {
+  "use strict";
+  var SERVER = "MMMN Metabase MCP";
+  var DOC_PATH = "modelo/actual";
+  var DEFAULT_PARAMS = { diasCobro: 60, margen: 0, iva: 0, stock: "total" };
+  var SEED = JSON.parse(document.getElementById("seed").textContent);
+
+  var state = clone(SEED);
+  var ui = { sortKey: "c", sortDir: -1, filtro: "", borrando: null };
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.textContent = text; return e; }
+
+  // ---------- formato ----------
+  function grupo(n) {
+    var s = Math.round(Math.abs(n)).toString();
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  function eur(n) { if (n === null || n === undefined || isNaN(n)) return "–"; var r = Math.round(n); if (r === 0) return "0 €"; return (r < 0 ? "−" : "") + grupo(r) + " €"; }
+  function meur(n) { if (isNaN(n)) return "–"; var v = Math.abs(n) / 1e6; var s = v.toFixed(v >= 10 ? 1 : 2).replace(".", ","); return (n < 0 ? "−" : "") + s + " M€"; }
+  function dias(n) { if (n === null || n === undefined || isNaN(n)) return "–"; return Math.round(n).toString(); }
+  function fecha(iso) { if (!iso) return "–"; var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso); }
+
+  var FORMAS = { "CONFIRMING": "Confirming", "PAGARE": "Pagaré", "TRANSF NAC": "Transferencia", "TRANSF_EXT": "Transferencia exterior", "RECIBO": "Recibo", "EFECTIVO": "Efectivo", "CHEQUE": "Cheque" };
+  function forma(pm) { if (!pm) return "–"; return FORMAS[pm] || (pm.charAt(0) + pm.slice(1).toLowerCase()); }
+  function diasNav(pt) {
+    if (pt === null || pt === undefined) return null;
+    var s = String(pt).trim().toUpperCase();
+    if (s === "CON" || s === "CONTADO") return 0;
+    var m = s.match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  }
+  function plazoTexto(d) { return d === 0 ? "Contado" : d + " días"; }
+
+  // ---------- cálculo ----------
+  function calcFila(p, prm) {
+    var f = (state.datos.filas || {})[p.n] || {};
+    var c = Number(f.c) || 0, sa = Number(f.sa) || 0, sc = Number(f.sc) || 0;
+    var dn = diasNav(f.pt);
+    var du = (p.dias === null || p.dias === undefined || p.dias === "") ? dn : Number(p.dias);
+    var dpCalc = (du === null || isNaN(du)) ? 0 : du;
+    var s = prm.stock === "almacen" ? sa : sa + sc;
+    var venta = c * (1 + prm.margen / 100);
+    var k = 1 + prm.iva / 100;
+    var cli = venta * k * prm.diasCobro / 365;
+    var pro = c * k * dpCalc / 365;
+    return {
+      p: p, f: f, c: c, sa: sa, sc: sc, dn: dn, du: du, dp: dpCalc, s: s, venta: venta,
+      cli: cli, pro: pro, nec: s + cli - pro, sinPlazo: (du === null || isNaN(du)),
+      dstock: c > 0 ? s / c * 365 : null
+    };
+  }
+  function calcTodo(prm) {
+    var filas = state.proveedores.map(function (p) { return calcFila(p, prm); });
+    var t = { c: 0, s: 0, sa: 0, sc: 0, venta: 0, cli: 0, pro: 0, nec: 0, cdp: 0 };
+    filas.forEach(function (r) { t.c += r.c; t.s += r.s; t.sa += r.sa; t.sc += r.sc; t.venta += r.venta; t.cli += r.cli; t.pro += r.pro; t.nec += r.nec; t.cdp += r.c * r.dp; });
+    t.dpMedio = t.c > 0 ? t.cdp / t.c : 0;
+    t.dstock = t.c > 0 ? t.s / t.c * 365 : 0;
+    return { filas: filas, t: t };
+  }
+  function prmActual() {
+    var p = state.params || DEFAULT_PARAMS;
+    return {
+      diasCobro: isFinite(p.diasCobro) ? Number(p.diasCobro) : 60,
+      margen: isFinite(p.margen) ? Number(p.margen) : 0,
+      iva: isFinite(p.iva) ? Number(p.iva) : 0,
+      stock: p.stock === "almacen" ? "almacen" : "total"
+    };
+  }
+
+  // ---------- render ----------
+  function renderParams() {
+    var p = prmActual();
+    $("p-dias").value = p.diasCobro;
+    $("p-margen").value = p.margen;
+    $("p-iva").value = p.iva;
+    $("p-stock").value = p.stock;
+    $("lede-dias").textContent = p.diasCobro;
+  }
+
+  function renderDatos() {
+    var d = state.datos || {};
+    $("chip-datos").textContent = "Navision: compras del " + fecha(d.desde) + " al " + fecha(d.hasta) + " · stock a " + fecha(d.fechaStock) + " · actualizado el " + fecha(d.actualizado);
+  }
+
+  function renderKpis(res) {
+    var t = res.t, p = prmActual();
+    var big = $("k-necesidad");
+    big.textContent = meur(t.nec);
+    big.className = "big num " + (t.nec > 0 ? "need" : "gain");
+    var gap = t.cli - t.pro;
+    var lectura = "Reynasa pagaría a estos proveedores a " + Math.round(t.dpMedio) + " días de media y cobraría a la red a " + p.diasCobro + ". ";
+    if (gap < 0) lectura += "Ese desfase le deja un excedente de " + meur(-gap) + "; ";
+    else lectura += "Ese desfase le exige " + meur(gap) + "; ";
+    lectura += "con " + meur(t.s) + " de stock (" + Math.round(t.dstock) + " días de compra), " + (t.nec > 0 ? "la necesidad total es de " + meur(t.nec) + "." : "le sobran " + meur(-t.nec) + ".");
+    $("k-lectura").textContent = lectura;
+    $("k-stock").textContent = meur(t.s);
+    $("k-stock-sub").textContent = (p.stock === "almacen" ? "solo almacén central · " : "almacén " + meur(t.sa) + " + centros " + meur(t.sc) + " · ") + Math.round(t.dstock) + " días";
+    $("k-clientes-lab").textContent = "+ Cobros pendientes de la red (" + p.diasCobro + " días)";
+    $("k-clientes").textContent = meur(t.cli);
+    $("k-clientes-sub").textContent = "venta a la red " + meur(t.venta) + (p.iva ? " · con IVA " + p.iva + " %" : "");
+    $("k-prov").textContent = meur(t.pro);
+    $("k-prov-sub").textContent = Math.round(t.dpMedio) + " días de pago de media, ponderada por compra";
+    $("k-compra").textContent = meur(t.c);
+    $("k-compra-sub").textContent = state.proveedores.length + " proveedores · coste sin IVA";
+  }
+
+  function renderPlazos(res) {
+    var g = {};
+    res.filas.forEach(function (r) { var k = r.sinPlazo ? -1 : r.dp; if (!g[k]) g[k] = { n: 0, c: 0, s: 0, gap: 0, nec: 0 }; g[k].n++; g[k].c += r.c; g[k].s += r.s; g[k].gap += r.cli - r.pro; g[k].nec += r.nec; });
+    var keys = Object.keys(g).map(Number).sort(function (a, b) { return b - a; });
+    var tb = $("tb-plazos"); tb.textContent = "";
+    keys.forEach(function (k) {
+      var tr = el("tr");
+      tr.appendChild(el("td", "l", k < 0 ? "Sin plazo (sin datos)" : plazoTexto(k)));
+      tr.appendChild(el("td", null, String(g[k].n)));
+      tr.appendChild(el("td", null, eur(g[k].c)));
+      tr.appendChild(el("td", null, eur(g[k].s)));
+      tr.appendChild(el("td", g[k].gap > 0 ? "pos" : "neg", eur(g[k].gap)));
+      tr.appendChild(el("td", g[k].nec > 0 ? "pos" : "neg", eur(g[k].nec)));
+      tb.appendChild(tr);
+    });
+  }
+
+  function renderSens() {
+    var p = prmActual();
+    var lista = [0, 30, 45, 60, 75, 90, 120];
+    if (lista.indexOf(p.diasCobro) < 0) { lista.push(p.diasCobro); lista.sort(function (a, b) { return a - b; }); }
+    var vals = lista.map(function (d) { var q = Object.assign({}, p, { diasCobro: d }); return { d: d, nec: calcTodo(q).t.nec }; });
+    var max = Math.max.apply(null, vals.map(function (v) { return Math.abs(v.nec); })) || 1;
+    var tb = $("tb-sens"); tb.textContent = "";
+    vals.forEach(function (v) {
+      var tr = el("tr", v.d === p.diasCobro ? "current" : null);
+      tr.appendChild(el("td", "l", v.d === 0 ? "Al contado" : v.d + " días"));
+      tr.appendChild(el("td", v.nec > 0 ? "pos" : "neg", eur(v.nec)));
+      var td = el("td", "barcell");
+      var b = el("span", "bar " + (v.nec > 0 ? "need" : "gain"));
+      b.style.width = Math.max(2, Math.round(Math.abs(v.nec) / max * 100)) + "%";
+      td.appendChild(b); tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+    var t = calcTodo(p).t;
+    var k = t.venta * (1 + p.iva / 100);
+    var nota = "";
+    if (k > 0) {
+      var be = (t.pro - t.s) * 365 / k;
+      if (be > 0) nota = "Reynasa no necesitaría caja cobrando a menos de " + Math.floor(be) + " días.";
+      else nota = "Con este stock, Reynasa necesita caja aunque cobre al contado: el stock pesa más que lo que financian los proveedores.";
+      var sinStock = t.pro * 365 / k;
+      nota += " Sin contar el stock, el punto de equilibrio está en " + Math.round(sinStock) + " días de cobro.";
+    }
+    $("sens-nota").textContent = nota;
+  }
+
+  var COLS = [
+    { k: "nombre", t: "Proveedor", l: true },
+    { k: "cat", t: "Categoría", l: true },
+    { k: "c", t: "Compra 12 meses" },
+    { k: "forma", t: "Forma de pago", l: true },
+    { k: "dn", t: "Días Navision" },
+    { k: "du", t: "Días de pago usados" },
+    { k: "sa", t: "Stock almacén" },
+    { k: "sc", t: "Stock centros" },
+    { k: "dstock", t: "Días de stock" },
+    { k: "cli", t: "Cobros pendientes" },
+    { k: "pro", t: "Pagos pendientes" },
+    { k: "nec", t: "Necesidad" },
+    { k: null, t: "" }
+  ];
+
+  function valorOrden(r, k) {
+    if (k === "nombre") return (r.p.nombre || "").toLowerCase();
+    if (k === "cat") return (r.p.cat || "").toLowerCase();
+    if (k === "forma") return forma(r.f.pm);
+    var v = r[k]; return (v === null || v === undefined) ? -Infinity : v;
+  }
+
+  function renderHead() {
+    var tr = $("tabla-head"); tr.textContent = "";
+    COLS.forEach(function (c) {
+      var th = el("th", c.l ? "l" : null);
+      if (c.k) {
+        var b = el("button", "sort", c.t + (ui.sortKey === c.k ? (ui.sortDir > 0 ? " ▲" : " ▼") : ""));
+        b.type = "button";
+        b.setAttribute("aria-label", "Ordenar por " + c.t);
+        b.addEventListener("click", function () {
+          if (ui.sortKey === c.k) ui.sortDir = -ui.sortDir; else { ui.sortKey = c.k; ui.sortDir = c.l ? 1 : -1; }
+          renderTabla();
+        });
+        th.appendChild(b);
+        th.setAttribute("aria-sort", ui.sortKey === c.k ? (ui.sortDir > 0 ? "ascending" : "descending") : "none");
+      }
+      tr.appendChild(th);
+    });
+  }
+
+  function avisos(r) {
+    var out = [];
+    var h = r.p.hoja;
+    if (r.f.b === 1 || r.f.b === "1") out.push(["bad", "Bloqueado para pagos en Navision"]);
+    else if (r.f.b === 2 || r.f.b === "2") out.push(["bad", "Bloqueado en Navision"]);
+    if (!state.datos.filas[r.p.n]) out.push(["warn", "Sin datos de Navision todavía: llegan con la actualización de esta noche"]);
+    else if (r.c <= 0) out.push(["warn", "Sin compra neta en el periodo"]);
+    if (r.dn === null && state.datos.filas[r.p.n]) out.push(["warn", "Sin plazo en Navision"]);
+    if (h && h.d !== null && h.d !== undefined && r.dn !== null && Number(h.d) !== r.dn) out.push(["warn", "Hoja de compras: " + h.d + " días"]);
+    if (h && h.f && r.f.pm && forma(r.f.pm) !== h.f) out.push(["warn", "Hoja de compras: " + h.f]);
+    return out;
+  }
+
+  function renderTabla() {
+    renderHead();
+    var prm = prmActual();
+    var res = calcTodo(prm);
+    var q = ui.filtro.trim().toLowerCase();
+    var filas = res.filas.filter(function (r) {
+      if (!q) return true;
+      return (r.p.nombre || "").toLowerCase().indexOf(q) >= 0 || r.p.n.indexOf(q) >= 0 || (r.p.cat || "").toLowerCase().indexOf(q) >= 0;
+    });
+    filas.sort(function (a, b) {
+      var va = valorOrden(a, ui.sortKey), vb = valorOrden(b, ui.sortKey);
+      if (va < vb) return -1 * ui.sortDir; if (va > vb) return 1 * ui.sortDir; return 0;
+    });
+    var tb = $("tabla-body"); tb.textContent = "";
+    filas.forEach(function (r) {
+      var tr = el("tr");
+      var tdN = el("td", "l name");
+      tdN.appendChild(el("div", "vname", r.p.nombre || "(sin nombre)"));
+      tdN.appendChild(el("div", "vno", "Nº " + r.p.n));
+      var av = avisos(r);
+      if (av.length) { var fl = el("div", "flags"); av.forEach(function (a) { fl.appendChild(el("span", "chip " + a[0], a[1])); }); tdN.appendChild(fl); }
+      tr.appendChild(tdN);
+      tr.appendChild(el("td", "l cat", r.p.cat || ""));
+      tr.appendChild(el("td", null, eur(r.c)));
+      tr.appendChild(el("td", "l", forma(r.f.pm)));
+      tr.appendChild(el("td", null, r.dn === null ? "–" : plazoTexto(r.dn).replace(" días", "")));
+      var tdD = el("td");
+      var inp = el("input", "days");
+      inp.type = "number"; inp.min = "0"; inp.max = "365"; inp.step = "1";
+      inp.id = "d-" + r.p.n;
+      inp.setAttribute("aria-label", "Días de pago usados para " + (r.p.nombre || r.p.n));
+      var override = !(r.p.dias === null || r.p.dias === undefined || r.p.dias === "");
+      inp.value = override ? r.p.dias : (r.dn === null ? "" : r.dn);
+      if (override) { inp.classList.add("override"); inp.title = "Cambiado a mano. Vacía la casilla para volver a los días de Navision."; }
+      inp.addEventListener("change", function () {
+        var v = inp.value.trim();
+        var p = findProv(r.p.n); if (!p) return;
+        if (v === "" || (r.dn !== null && Number(v) === r.dn)) p.dias = null;
+        else { var n = Math.max(0, Math.min(365, Math.round(Number(v)))); if (isNaN(n)) return; p.dias = n; }
+        guardar(); renderTodo();
+      });
+      tdD.appendChild(inp); tr.appendChild(tdD);
+      tr.appendChild(el("td", null, eur(r.sa)));
+      tr.appendChild(el("td", null, eur(r.sc)));
+      tr.appendChild(el("td", null, r.dstock === null ? "–" : dias(r.dstock)));
+      tr.appendChild(el("td", null, eur(r.cli)));
+      tr.appendChild(el("td", null, eur(r.pro)));
+      tr.appendChild(el("td", r.nec > 0 ? "pos" : "neg", eur(r.nec)));
+      var tdX = el("td");
+      var bx = el("button", "link danger", ui.borrando === r.p.n ? "¿Quitar?" : "Quitar");
+      bx.type = "button";
+      bx.setAttribute("aria-label", "Quitar " + (r.p.nombre || r.p.n) + " del cálculo");
+      bx.addEventListener("click", function () {
+        if (ui.borrando === r.p.n) {
+          state.proveedores = state.proveedores.filter(function (x) { return x.n !== r.p.n; });
+          ui.borrando = null; guardar(); renderTodo();
+          aviso("ok", "Proveedor quitado del cálculo en este navegador. Para recuperarlo, pulsa «Volver a los datos de Navision».");
+        } else {
+          ui.borrando = r.p.n; renderTabla();
+          setTimeout(function () { if (ui.borrando === r.p.n) { ui.borrando = null; renderTabla(); } }, 4000);
+        }
+      });
+      tdX.appendChild(bx); tr.appendChild(tdX);
+      tb.appendChild(tr);
+    });
+    var t = res.t;
+    var ft = $("tabla-foot"); ft.textContent = "";
+    var vis = filas.length === res.filas.length ? "Total " + res.filas.length + " proveedores" : "Total (" + res.filas.length + " proveedores; la búsqueda no cambia el total)";
+    [vis, "", eur(t.c), "", "", Math.round(t.dpMedio) + " de media", eur(t.sa), eur(t.sc), dias(t.dstock), eur(t.cli), eur(t.pro), eur(t.nec), ""].forEach(function (v, i) {
+      var td = el("td", (i === 0 || i === 1 || i === 3) ? "l" : null, v);
+      if (i === 11) td.className = t.nec > 0 ? "pos" : "neg";
+      ft.appendChild(td);
+    });
+  }
+
+  function findProv(n) { for (var i = 0; i < state.proveedores.length; i++) if (state.proveedores[i].n === n) return state.proveedores[i]; return null; }
+
+  function renderTodo() {
+    var res = calcTodo(prmActual());
+    renderParams(); renderDatos(); renderKpis(res); renderPlazos(res); renderSens(); renderTabla();
+  }
+
+  // ---------- mensajes ----------
+  function aviso(tipo, texto) {
+    var m = $("msg"); m.className = "msg show " + tipo; m.textContent = texto;
+  }
+  function limpiarAviso() { $("msg").className = "msg"; $("msg").textContent = ""; }
+
+  // ---------- parámetros ----------
+  function leerParams() {
+    function num(id, def, lo, hi) { var v = Number($(id).value); if (!isFinite(v) || $(id).value === "") return def; return Math.max(lo, Math.min(hi, v)); }
+    state.params = {
+      diasCobro: Math.round(num("p-dias", 60, 0, 365)),
+      margen: num("p-margen", 0, 0, 100),
+      iva: num("p-iva", 0, 0, 21),
+      stock: $("p-stock").value === "almacen" ? "almacen" : "total"
+    };
+    guardar(); renderTodo();
+  }
+  ["p-dias", "p-margen", "p-iva", "p-stock"].forEach(function (id) { $(id).addEventListener("change", leerParams); });
+  $("form-params").addEventListener("submit", function (e) { e.preventDefault(); leerParams(); });
+  $("btn-reset-params").addEventListener("click", function () { state.params = clone(DEFAULT_PARAMS); guardar(); renderTodo(); });
+  $("f-buscar").addEventListener("input", function () { ui.filtro = this.value; renderTabla(); });
+
+  // ---------- exportar ----------
+  function filasExport() {
+    var res = calcTodo(prmActual());
+    var cab = ["Nº proveedor", "Proveedor", "Categoría", "Compra 12 meses (€)", "Forma de pago", "Días de pago Navision", "Días de pago usados", "Stock almacén (€)", "Stock centros (€)", "Stock financiado (€)", "Días de stock", "Cobros pendientes (€)", "Pagos pendientes (€)", "Necesidad (€)"];
+    var rows = res.filas.map(function (r) {
+      return [r.p.n, r.p.nombre || "", r.p.cat || "", Math.round(r.c), forma(r.f.pm), r.dn === null ? "" : r.dn, r.dp, Math.round(r.sa), Math.round(r.sc), Math.round(r.s), r.dstock === null ? "" : Math.round(r.dstock), Math.round(r.cli), Math.round(r.pro), Math.round(r.nec)];
+    });
+    var t = res.t;
+    rows.push(["", "TOTAL", "", Math.round(t.c), "", "", Math.round(t.dpMedio), Math.round(t.sa), Math.round(t.sc), Math.round(t.s), Math.round(t.dstock), Math.round(t.cli), Math.round(t.pro), Math.round(t.nec)]);
+    var p = prmActual();
+    rows.push([]);
+    rows.push(["Supuestos", "Días de cobro a la red: " + p.diasCobro, "Stock: " + (p.stock === "almacen" ? "solo almacén central" : "almacén central y centros"), "Margen: " + p.margen + " %", "IVA: " + p.iva + " %"]);
+    return [cab].concat(rows);
+  }
+  function aTexto(filas, sep) {
+    return filas.map(function (f) { return f.map(function (v) { var s = String(v === undefined ? "" : v); if (s.indexOf(sep) >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) s = '"' + s.replace(/"/g, '""') + '"'; return s; }).join(sep); }).join("\r\n");
+  }
+  $("btn-csv").addEventListener("click", function () {
+    var texto = "\uFEFF" + aTexto(filasExport(), ";");
+    try {
+      var blob = new Blob([texto], { type: "text/csv;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "Tesoreria proveedores de surtido.csv";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+      aviso("ok", "CSV descargado. Se abre en Excel con columnas separadas por punto y coma.");
+    } catch (e) {
+      aviso("error", "El navegador no ha dejado descargar el CSV. Usa «Copiar tabla» y pégala en Excel.");
+    }
+  });
+  $("btn-copiar").addEventListener("click", function () {
+    var texto = aTexto(filasExport(), "\t");
+    if (!navigator.clipboard || !navigator.clipboard.writeText) { aviso("error", "Este navegador no deja copiar desde la página."); return; }
+    navigator.clipboard.writeText(texto).then(function () { aviso("ok", "Tabla copiada. Pégala en Excel."); }, function () { aviso("error", "El navegador no ha dejado copiar la tabla."); });
+  });
+
+  // ---------- datos del repositorio y cambios de este navegador ----------
+  var CLAVE = "tesoreria-proveedores-escenario";
+  var BASE = { proveedores: clone(SEED.proveedores), datos: clone(SEED.datos) };
+  function chipGuardado(ok) {
+    var c = $("chip-guardado");
+    c.className = ok ? "chip warn" : "chip bad";
+    c.textContent = ok ? "Tus cambios se guardan solo en este navegador" : "Este navegador no deja guardar los cambios";
+  }
+  function leerLocal() {
+    try { var o = JSON.parse(localStorage.getItem(CLAVE) || "null"); return (o && typeof o === "object") ? o : null; } catch (e) { return null; }
+  }
+  function escribirLocal(esc) {
+    try { localStorage.setItem(CLAVE, JSON.stringify(esc)); chipGuardado(true); } catch (e) { chipGuardado(false); }
+  }
+  function guardar() {
+    var esc = { params: state.params, dias: {}, quitados: [] };
+    var presentes = {};
+    state.proveedores.forEach(function (p) {
+      presentes[p.n] = true;
+      if (p.dias !== null && p.dias !== undefined && p.dias !== "") esc.dias[p.n] = p.dias;
+    });
+    BASE.proveedores.forEach(function (p) { if (!presentes[p.n]) esc.quitados.push(p.n); });
+    escribirLocal(esc);
+  }
+  function aplicarEscenario() {
+    var esc = leerLocal() || {};
+    var quitados = Array.isArray(esc.quitados) ? esc.quitados : [];
+    var d = (esc.dias && typeof esc.dias === "object") ? esc.dias : {};
+    state = {
+      params: Object.assign({}, DEFAULT_PARAMS, esc.params || {}),
+      proveedores: BASE.proveedores.filter(function (p) { return quitados.indexOf(p.n) < 0; }).map(function (p) {
+        var q = clone(p);
+        var v = d[p.n];
+        q.dias = (v === null || v === undefined || v === "" || !isFinite(v)) ? null : Number(v);
+        return q;
+      }),
+      datos: BASE.datos
+    };
+  }
+  $("btn-restaurar").addEventListener("click", function () {
+    var esc = leerLocal() || {};
+    esc.dias = {}; esc.quitados = [];
+    escribirLocal(esc);
+    aplicarEscenario(); renderTodo();
+    aviso("ok", "Vuelves a ver todos los proveedores con los días de pago de Navision.");
+  });
+  function leerJson(url) {
+    return fetch(url, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(url); return r.json(); });
+  }
+  function cargarDatos() {
+    Promise.all([leerJson("proveedores-surtido.json"), leerJson("proveedores.json")]).then(function (res) {
+      var conf = res[0], dat = res[1];
+      if (!Array.isArray(conf) || !dat || typeof dat.filas !== "object") throw new Error("formato");
+      BASE.proveedores = conf.filter(function (p) { return p && /^\d{6,12}$/.test(String(p.n)); }).map(function (p) {
+        return { n: String(p.n), nombre: String(p.nombre || ""), cat: String(p.cat || ""), dias: null, hoja: p.hoja || null };
+      });
+      BASE.datos = { desde: dat.desde, hasta: dat.hasta, fechaStock: dat.fechaStock, actualizado: dat.generado, filas: dat.filas };
+      aplicarEscenario(); renderTodo();
+    }).catch(function () {
+      aviso("error", "No se han podido leer los ficheros de datos (proveedores.json y proveedores-surtido.json). Recarga la página en unos minutos.");
+    });
+  }
+
+  // ---------- arranque ----------
+  aplicarEscenario();
+  renderTodo();
+  cargarDatos();
+})();
+</script>
+</body>
+</html>
