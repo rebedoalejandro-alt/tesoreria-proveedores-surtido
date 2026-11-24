@@ -40,13 +40,13 @@ Para añadir o quitar un proveedor para todos, edita proveedores-surtido.json en
 
 ## Actualización nocturna
 
-El workflow «Actualizar datos y publicar» (.github/workflows/publicar.yml):
+El workflow «Actualizar datos» (.github/workflows/publicar.yml):
 
 1. Cada noche a las 02:17 UTC ejecuta actualizar-datos.py, que consulta Metabase y reescribe proveedores.json.
 2. Si los datos han cambiado, los guarda en el repositorio.
-3. Publica la web en GitHub Pages.
+3. Si han cambiado, pide a GitHub Pages que vuelva a publicar la web.
 
-También se puede lanzar a mano desde la pestaña Actions → «Actualizar datos y publicar» → Run workflow. Cada cambio que se guarde en la rama main vuelve a publicar la web, sin consultar Metabase.
+También se puede lanzar a mano desde la pestaña Actions → «Actualizar datos» → Run workflow. GitHub Pages publica la web directamente desde la rama main, así que cualquier cambio guardado en el repositorio se ve en la web al cabo de un minuto.
 
 ### Puesta en marcha (una sola vez)
 
@@ -55,14 +55,14 @@ También se puede lanzar a mano desde la pestaña Actions → «Actualizar datos
 3. Opcional: si Metabase cambia de dirección, crear en la misma pantalla una variable METABASE_URL.
 4. Lanzar el workflow a mano una vez y comprobar que termina en verde.
 
-Sin el secreto, el workflow publica la web con los últimos datos guardados y avisa de que no ha actualizado. Si Metabase no acepta conexiones desde los servidores de GitHub, el paso de actualización fallará: los datos publicados no se tocan y GitHub avisa por correo del fallo.
+Sin el secreto, el workflow avisa de que no ha actualizado y la web sigue con los últimos datos guardados. Si Metabase no acepta conexiones desde los servidores de GitHub, el paso de actualización fallará: los datos publicados no se tocan y GitHub avisa por correo del fallo.
 
 ## Ficheros
 
 - index.html: la web.
 - proveedores-surtido.json y proveedores.json: datos.
 - actualizar-datos.py: script de actualización; solo usa la librería estándar de Python.
-- .github/workflows/publicar.yml: actualización nocturna y publicación.
+- .github/workflows/publicar.yml: actualización nocturna de los datos.
 
 ## Aviso
 
